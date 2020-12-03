@@ -1,0 +1,13 @@
+h1{
+    color: red;
+    text-align: center;
+}
+
+button{
+    border-radius: 5px;
+}
+
+body{
+    background-color: aquamarine;
+    align-items: center;
+}
