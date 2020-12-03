@@ -3,21 +3,31 @@
     <head>
         <base href="..">
         <title>LED Webserver</title>
-        <link type="text/css" rel="stylesheet" href="css/style.css">
-        <script type="text/javascript" src="js/script.js"></script>
+        <link type="text/css" rel="stylesheet" href="/style.css">
+        <script type="text/javascript" src="/script.js"></script>
     </head>
     <body>
-        <h1>LED Webserver</h1>
+        <h1><a href="/">LED Webserver</a></h1>
 
-        
+        <section id="buttons" class="flex">
+            <article>
+                <form action="/led_on" method="GET">
+                    <input type="submit" value="LED ON">
+                </form>
+            </article>
 
-        <button class="bt1" type="button" onclick="led_on()">LED ON</button>
-        <button class="bt2" type="button" onclick="led_off()">LED OFF</button>
+            <article>
+                <form action="/led_off" method="GET">
+                    <input type="submit" value="LED OFF">
+                </form>
+            </article>
+        </section>
 
-        <!-- <canvas id="LED_canvas" width="500px"  height="500px">
-            Your browser doesn't support canvas
-        </canvas>
-        <script>draw();</script> -->
-
+        <section class="flex">
+            <canvas id="LED_canvas" width="200" height="200">
+                Your browser doesn't support canvas
+            </canvas>
+            <script>drawCircle();</script>
+        </section>
     </body>
 </html>

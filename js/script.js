@@ -1,20 +1,17 @@
-window.onload = function(){
-    document.getElementById("bt1").onclick = led_on;
-    document.getElementById("bt2").onclick = led_off;
-}
-
-function draw(){
+function drawCircle(){
     var canvas = document.getElementById('LED_canvas');
-    var ctx = canvas.getContext('2d');
-    ctx.fillRect(25, 25, 100, 100);
+    var context = canvas.getContext('2d');
+    var centerX = canvas.width / 2;
+    var centerY = canvas.height / 2;
+    var radius = 70;
+
+    context.beginPath();
+    context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+    context.fillStyle = 'gray';
+    context.fill();
+    context.lineWidth = 5;
+    context.strokeStyle = '#888888';
+    context.stroke();
 }
 
-function led_on(){
-    xhr.open('GET', '/', true);
-    xhr.setRequestHeader("Content-Type", "text/plain");    
-    xhr.send('led_on')
-}
 
-function led_off(){
-    alert("LED OFF")
-}

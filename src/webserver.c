@@ -1,298 +1,396 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <stdbool.h>
-#include <limits.h>
-#include <pthread.h>
+/*
+ * MIT License
+ *
+ * Copyright (c) 2018 Lewis Van Winkle
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 
-#define SERVERPORT      8989
-#define BUFSIZE         4096
-#define SOCKETERROR     (-1)
-#define SERVER_BACKLOG  100
-// #define THREAD_POLL_SIZE    20
-#define THREAD_POLL_SIZE    1
+#include "chap07.h"
 
-
-typedef struct
+const char *get_directory(const char *path)
 {
-    char *content;
-    long size;
-} File;
-
-typedef struct 
-{
-    File css;
-    File javascript;
-    File html;
-} Page;
-
-typedef struct sockaddr_in SA_IN;
-typedef struct sockaddr    SA;
-
-pthread_t thread_pool[THREAD_POLL_SIZE];
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-
-void *handle_connection(void *args);
-int check(int exp, const char *msg);
-
-void *thread_function(void *args);
-
-int loadCSS(File *css);
-int loadJavascript(File *javascript);
-int loadHTML(File *html);
-char *Parse_getService(char *buffer);
-
-int buildPage(Page *page);
-int destroyPage(Page *page);
-
-long getFileSize(FILE *file);
-
-int main(int argc, char const *argv[])
-{
-    int server_socket, client_socket, addr_size;
-    SA_IN server_addr, client_addr;
-
-    for (int i = 0; i < THREAD_POLL_SIZE; i++)
-    {
-        pthread_create(&thread_pool[i], NULL, thread_function, NULL);
-    }
-    
-
-    check((server_socket = socket(AF_INET, SOCK_STREAM, 0)), "Failed to create socket");
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(SERVERPORT);
-
-    int yes = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, (void *)&yes, sizeof(yes)) < 0)
-    {
-        fprintf(stderr, "setsockopt() failed.\n");
+    const char *last_dot = strrchr(path, '.');
+    if (last_dot) {
+        if (strcmp(last_dot, ".css") == 0)
+            return "css";
+        else if (strcmp(last_dot, ".js") == 0)
+            return "js";
+        else if (strcmp(last_dot, ".html") == 0)
+            return "page";
     }
 
-    check(bind(server_socket, (SA*)&server_addr, sizeof(server_addr)), "Bind Failed!");
-
-    check(listen(server_socket, SERVER_BACKLOG), "Listen Failed!");
-
-    while(true)
-    {
-        printf("Waiting for connections...\n");
-
-        addr_size = sizeof(SA_IN);
-        
-        check(client_socket = accept(server_socket, (SA*)&client_addr, (socklen_t *)&addr_size), "Accept Failed!");
-
-        printf("Connected!\n");
-
-        // pthread_t t;
-        int *pclient = malloc(sizeof(int));
-        *pclient = client_socket;
-        pthread_mutex_lock(&mutex);
-        enqueue(pclient);
-        pthread_cond_signal(&cond);
-        pthread_mutex_unlock(&mutex);
-        // pthread_create(&t, NULL, handle_connection, pclient);
-    }
-    return 0;
+    return "UNKNOW";
 }
 
-void *thread_function(void *args)
-{
-    while(true){
-        int *pclient;
-        pthread_mutex_lock(&mutex);
-        if((pclient = dequeue()) == NULL){
-            pthread_cond_wait(&cond, &mutex);
-            pclient = dequeue();
-        }        
-        pthread_mutex_unlock(&mutex);
-        if(pclient != NULL){
-            handle_connection(pclient);
-        }
+
+const char *get_content_type(const char* path) {
+    const char *last_dot = strrchr(path, '.');
+    if (last_dot) {
+        if (strcmp(last_dot, ".css") == 0) return "text/css";
+        if (strcmp(last_dot, ".csv") == 0) return "text/csv";
+        if (strcmp(last_dot, ".gif") == 0) return "image/gif";
+        if (strcmp(last_dot, ".htm") == 0) return "text/html";
+        if (strcmp(last_dot, ".html") == 0) return "text/html";
+        if (strcmp(last_dot, ".ico") == 0) return "image/x-icon";
+        if (strcmp(last_dot, ".jpeg") == 0) return "image/jpeg";
+        if (strcmp(last_dot, ".jpg") == 0) return "image/jpeg";
+        if (strcmp(last_dot, ".js") == 0) return "application/javascript";
+        if (strcmp(last_dot, ".json") == 0) return "application/json";
+        if (strcmp(last_dot, ".png") == 0) return "image/png";
+        if (strcmp(last_dot, ".pdf") == 0) return "application/pdf";
+        if (strcmp(last_dot, ".svg") == 0) return "image/svg+xml";
+        if (strcmp(last_dot, ".txt") == 0) return "text/plain";
     }
+
+    return "application/octet-stream";
 }
 
-int check(int exp, const char *msg)
-{
-    if(exp == SOCKETERROR){
-        perror(msg);
+
+SOCKET create_socket(const char* host, const char *port) {
+    printf("Configuring local address...\n");
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    struct addrinfo *bind_address;
+    getaddrinfo(host, port, &hints, &bind_address);
+
+    printf("Creating socket...\n");
+    SOCKET socket_listen;
+    socket_listen = socket(bind_address->ai_family,
+            bind_address->ai_socktype, bind_address->ai_protocol);
+    if (!ISVALIDSOCKET(socket_listen)) {
+        fprintf(stderr, "socket() failed. (%d)\n", GETSOCKETERRNO());
         exit(1);
     }
 
-    return exp;
+    int yes = 1;
+    if (setsockopt(socket_listen, SOL_SOCKET, SO_REUSEADDR, (void*)&yes, sizeof(yes)) < 0) {
+        fprintf(stderr, "setsockopt() failed. (%d)\n", errno);
+    }
+
+    printf("Binding socket to local address...\n");
+    if (bind(socket_listen,
+                bind_address->ai_addr, bind_address->ai_addrlen)) {
+        fprintf(stderr, "bind() failed. (%d)\n", GETSOCKETERRNO());
+        exit(1);
+    }
+    freeaddrinfo(bind_address);
+
+    printf("Listening...\n");
+    if (listen(socket_listen, 10) < 0) {
+        fprintf(stderr, "listen() failed. (%d)\n", GETSOCKETERRNO());
+        exit(1);
+    }
+
+    return socket_listen;
 }
 
-void *handle_connection(void *args)
-{
-    char buffer[BUFSIZE];
-    size_t bytes_read;
 
-    int client_socket = *(int *)args;
 
-    free(args);
+#define MAX_REQUEST_SIZE 2047
 
-    int msgsize = 0;
-    char actualpath[_PC_PATH_MAX + 1];
+struct client_info {
+    socklen_t address_length;
+    struct sockaddr_storage address;
+    SOCKET socket;
+    char request[MAX_REQUEST_SIZE + 1];
+    int received;
+    struct client_info *next;
+};
 
-    while((bytes_read = recv(client_socket, buffer+msgsize, sizeof(buffer) - msgsize - 1, 0)) > 0){
-        msgsize += bytes_read;
-        if(msgsize > BUFSIZE - 1 || buffer[msgsize - 1] == '\n')
+static struct client_info *clients = 0;
+
+struct client_info *get_client(SOCKET s) {
+    struct client_info *ci = clients;
+
+    while(ci) {
+        if (ci->socket == s)
             break;
-    }    
-    
-    
-    printf("REQUEST: %s\n", buffer);    
+        ci = ci->next;
+    }
 
-    //verify which endpoint was received    
+    if (ci) return ci;
+    struct client_info *n =
+        (struct client_info*) calloc(1, sizeof(struct client_info));
 
-    char *pService = Parse_getService(buffer);
-        
-    if(pService[0] == '/')
-    {
+    if (!n) {
+        fprintf(stderr, "Out of memory.\n");
+        exit(1);
+    }
 
-        Page page;
-        buildPage(&page);
+    n->address_length = sizeof(n->address);
+    n->next = clients;
+    clients = n;
+    return n;
+}
 
-        memset(buffer, 0, BUFSIZE);
-        sprintf(buffer, "HTTP/1.1 200 OK\r\n");
-        send(client_socket, buffer, strlen(buffer), 0);
 
-        sprintf(buffer, "Connection: close\r\n");
-        send(client_socket, buffer, strlen(buffer), 0);
+void drop_client(struct client_info *client) {
+    CLOSESOCKET(client->socket);
 
-        sprintf(buffer, "Content-Length: %ld\r\n", page.html.size);
-        send(client_socket, buffer, strlen(buffer), 0);
+    struct client_info **p = &clients;
 
-        sprintf(buffer, "Content-Type: %s\r\n", "text/html");
-        send(client_socket, buffer, strlen(buffer), 0);
+    while(*p) {
+        if (*p == client) {
+            *p = client->next;
+            free(client);
+            return;
+        }
+        p = &(*p)->next;
+    }
 
-        sprintf(buffer, "\r\n");
-        send(client_socket, buffer, strlen(buffer), 0);
+    fprintf(stderr, "drop_client not found.\n");
+    exit(1);
+}
 
-        send(client_socket, page.html.content, strlen(page.html.content), 0);
 
-        destroyPage(&page);
+const char *get_client_address(struct client_info *ci) {
+    static char address_buffer[100];
+    getnameinfo((struct sockaddr*)&ci->address,
+            ci->address_length,
+            address_buffer, sizeof(address_buffer), 0, 0,
+            NI_NUMERICHOST);
+    return address_buffer;
+}
 
-    }else{
-        const char *c404 = "HTTP/1.1 404 Not Found\r\n"
+
+
+
+fd_set wait_on_clients(SOCKET server) {
+    fd_set reads;
+    FD_ZERO(&reads);
+    FD_SET(server, &reads);
+    SOCKET max_socket = server;
+
+    struct client_info *ci = clients;
+
+    while(ci) {
+        FD_SET(ci->socket, &reads);
+        if (ci->socket > max_socket)
+            max_socket = ci->socket;
+        ci = ci->next;
+    }
+
+    if (select(max_socket+1, &reads, 0, 0, 0) < 0) {
+        fprintf(stderr, "select() failed. (%d)\n", GETSOCKETERRNO());
+        exit(1);
+    }
+
+    return reads;
+}
+
+
+void send_400(struct client_info *client) {
+    const char *c400 = "HTTP/1.1 400 Bad Request\r\n"
+        "Connection: close\r\n"
+        "Content-Length: 11\r\n\r\nBad Request";
+    send(client->socket, c400, strlen(c400), 0);
+    drop_client(client);
+}
+
+void send_404(struct client_info *client) {
+    const char *c404 = "HTTP/1.1 404 Not Found\r\n"
         "Connection: close\r\n"
         "Content-Length: 9\r\n\r\nNot Found";
-        send(client_socket, c404, strlen(c404), 0);
-    }
-
-    close(client_socket);
-    // fclose(fp);
-    printf("Closing connection\n");
-    return NULL;
+    send(client->socket, c404, strlen(c404), 0);
+    drop_client(client);
 }
 
-int loadCSS(File *css)
-{
-    if(css)
-    {
-        FILE *file = fopen("css/style.css", "r");
-        if(file)
-        {
-            css->size = getFileSize(file);
-            css->content = (char *)malloc(sizeof(char) * css->size + 1);
-            if(css->content)
-            {
-                size_t read_total = fread(css->content, 1, css->size + 1, file);                                
+
+
+void serve_resource(struct client_info *client, const char *path) {
+
+    printf("serve_resource %s %s\n", get_client_address(client), path);
+
+    if (strcmp(path, "/") == 0)
+        path = "/index.html";
+
+    if (strncmp(path, "/led_on", 7) == 0)
+        path = "/index.html";
+
+    if (strncmp(path, "/led_off", 8) == 0)
+        path = "/index.html";
+
+    if (strlen(path) > 100) {
+        send_400(client);
+        return;
+    }
+
+    if (strstr(path, "..")) {
+        send_404(client);
+        return;
+    }
+
+    char full_path[128];
+    sprintf(full_path, "%s%s", get_directory(path), path);
+
+#if defined(_WIN32)
+    char *p = full_path;
+    while (*p) {
+        if (*p == '/') *p = '\\';
+        ++p;
+    }
+#endif
+
+    printf("full_path = %s.\n", full_path);
+    FILE *fp = fopen(full_path, "rb");
+
+    if (!fp) {
+        send_404(client);
+        return;
+    }
+
+    fseek(fp, 0L, SEEK_END);
+    size_t cl = ftell(fp);
+    rewind(fp);
+
+    const char *ct = get_content_type(full_path);
+
+#define BSIZE 1024
+    char buffer[BSIZE];
+
+    sprintf(buffer, "HTTP/1.1 200 OK\r\n");
+    send(client->socket, buffer, strlen(buffer), 0);
+
+    sprintf(buffer, "Connection: close\r\n");
+    send(client->socket, buffer, strlen(buffer), 0);
+
+    sprintf(buffer, "Content-Length: %u\r\n", cl);
+    send(client->socket, buffer, strlen(buffer), 0);
+
+    sprintf(buffer, "Content-Type: %s\r\n", ct);
+    send(client->socket, buffer, strlen(buffer), 0);
+
+    sprintf(buffer, "\r\n");
+    send(client->socket, buffer, strlen(buffer), 0);
+
+    int r = fread(buffer, 1, BSIZE, fp);
+    while (r) {
+        send(client->socket, buffer, r, 0);
+        r = fread(buffer, 1, BSIZE, fp);
+    }    
+
+    fclose(fp);
+    drop_client(client);
+}
+
+
+int main() {
+
+#if defined(_WIN32)
+    WSADATA d;
+    if (WSAStartup(MAKEWORD(2, 2), &d)) {
+        fprintf(stderr, "Failed to initialize.\n");
+        return 1;
+    }
+#endif
+
+    SOCKET server = create_socket(0, "8989");
+
+    while(1) {
+
+        fd_set reads;
+        reads = wait_on_clients(server);
+
+        if (FD_ISSET(server, &reads)) {
+            struct client_info *client = get_client(-1);
+
+            client->socket = accept(server,
+                    (struct sockaddr*) &(client->address),
+                    &(client->address_length));
+
+            if (!ISVALIDSOCKET(client->socket)) {
+                fprintf(stderr, "accept() failed. (%d)\n",
+                        GETSOCKETERRNO());
+                return 1;
             }
 
-            fclose(file);
-        }
-    }
-}
 
-int loadJavascript(File *javascript)
-{
-    if(javascript)
-    {
-        FILE *file = fopen("js/script.js", "r");
-        if(file)
-        {
-            javascript->size = getFileSize(file);
-            javascript->content = (char *)malloc(sizeof(char) * javascript->size + 1);
-            if(javascript->content)
-            {
-                size_t read_total = fread(javascript->content, 1, javascript->size + 1, file);                                
+            printf("New connection from %s.\n",
+                    get_client_address(client));
+        }
+
+
+        struct client_info *client = clients;
+        while(client) {
+            struct client_info *next = client->next;
+
+            if (FD_ISSET(client->socket, &reads)) {
+
+                if (MAX_REQUEST_SIZE == client->received) {
+                    send_400(client);
+                    client = next;
+                    continue;
+                }
+
+                int r = recv(client->socket,
+                        client->request + client->received,
+                        MAX_REQUEST_SIZE - client->received, 0);
+
+                if (r < 1) {
+                    printf("Unexpected disconnect from %s.\n",
+                            get_client_address(client));
+                    drop_client(client);
+
+                } else {
+                    client->received += r;
+                    client->request[client->received] = 0;
+
+                    char *q = strstr(client->request, "\r\n\r\n");
+                    if (q) {
+                        *q = 0;
+
+                        if (strncmp("GET /", client->request, 5)) {
+                            send_400(client);
+                        } else {
+                            char *path = client->request + 4;
+                            char *end_path = strstr(path, " ");
+                            if (!end_path) {
+                                send_400(client);
+                            } else {
+                                *end_path = 0;
+                                serve_resource(client, path);
+                            }
+                        }
+                    } //if (q)
+                }
             }
 
-            fclose(file);
+            client = next;
         }
-    }
-}
 
-int loadHTML(File *html)
-{
-    if(html)
-    {
-        FILE *file = fopen("page/index.html", "r");
-        if(file)
-        {
-            html->size = getFileSize(file);
-            html->content = (char *)malloc(sizeof(char) * html->size + 1);
-            if(html->content)
-            {
-                size_t read_total = fread(html->content, 1, html->size + 1, file);                                
-            }
+    } //while(1)
 
-            fclose(file);
-        }
-    }
-}
 
-long getFileSize(FILE *file)
-{
-    long size = 0;
-    if(file)
-    {
-        fseek(file, 0, SEEK_END);
-        size = ftell(file);
-        rewind(file);
-    }
-    return size;
-}
+    printf("\nClosing socket...\n");
+    CLOSESOCKET(server);
 
-char *Parse_getService(char *buffer)
-{   
-    char *pch = NULL;
-    char *end = NULL;
-    char *pBuffer = buffer;
-    pch=strchr(buffer, '/');
 
-    for(int i = 0; ; i++)
-    {
-        if(!pch)
-            return NULL;
+#if defined(_WIN32)
+    WSACleanup();
+#endif
 
-        if(*(pch + i) == '?' || *(pch + i) == ' ')
-        {
-            end = (pch + i);
-            break;
-        }
-    }
-
-    return strndup(pch, end - pch);
-}
-
-int buildPage(Page *page)
-{
-    loadCSS(&page->css);
-    loadJavascript(&page->javascript);
-    loadHTML(&page->html);
-
+    printf("Finished.\n");
     return 0;
 }
 
-int destroyPage(Page *page)
-{
-    free(page->css.content);
-    free(page->css.content);
-    free(page->css.content);
-}

@@ -11,3 +11,31 @@ body{
     background-color: aquamarine;
     align-items: center;
 }
+
+article{
+    display: inline;
+    text-align: center;
+    margin: 0 auto;    
+}
+
+section{
+    border: 1px solid #000;
+    width: 25%;
+    height: auto;
+    margin: 0 auto;
+}
+
+.flex{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+#LED_canvas{
+   margin-left: auto;
+   margin-right: auto;
+}
+
+a{
+    color: blueviolet;
+}
