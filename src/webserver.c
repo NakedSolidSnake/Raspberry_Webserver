@@ -36,7 +36,7 @@ const char *get_directory(const char *path)
             return "page";
     }
 
-    return "UNKNOW";
+    return "";
 }
 
 

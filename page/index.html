@@ -11,15 +11,11 @@
 
         <section id="buttons" class="flex">
             <article>
-                <form action="/led_on" method="GET">
-                    <input type="submit" value="LED ON">
-                </form>
+                <button onclick="sendLED('red', '/led_on')">LED ON</button>
             </article>
 
             <article>
-                <form action="/led_off" method="GET">
-                    <input type="submit" value="LED OFF">
-                </form>
+                <button onclick="sendLED('gray', '/led_off')">LED OFF</button>
             </article>
         </section>
 
