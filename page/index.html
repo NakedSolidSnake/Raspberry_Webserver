@@ -6,16 +6,16 @@
         <link type="text/css" rel="stylesheet" href="/style.css">
         <script type="text/javascript" src="/script.js"></script>
     </head>
-    <body>
+    <body onload="sendLED('/led_off')">
         <h1><a href="/">LED Webserver</a></h1>
 
         <section id="buttons" class="flex">
             <article>
-                <button onclick="sendLED('red', '/led_on')">LED ON</button>
+                <button onclick="sendLED('/led_on')">LED ON</button>
             </article>
 
             <article>
-                <button onclick="sendLED('gray', '/led_off')">LED OFF</button>
+                <button onclick="sendLED('/led_off')">LED OFF</button>
             </article>
         </section>
 

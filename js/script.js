@@ -7,7 +7,6 @@ function drawCircle(color){
 
     context.beginPath();
     context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-    console.log(color);
     context.fillStyle = color;
     context.fill();
     context.lineWidth = 5;
@@ -23,13 +22,20 @@ function print(message){
     }
 }
 
-function sendLED(color, endpoint){
+function sendLED(endpoint){
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
     if (this.readyState == 4 && this.status == 200) {
        // Typical action to be performed when the document is ready:
-            drawCircle(color);
+            let color;
             console.log(this.responseText);
+            if(this.responseText === '1'){
+                color = 'red';
+            }else if(this.responseText === '0'){
+                color = 'gray';
+            }
+            
+            drawCircle(color);
             // document.getElementById("demo").innerHTML = xhttp.responseText;            
         }
     };

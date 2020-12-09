@@ -219,17 +219,61 @@ void send_404(struct client_info *client) {
 
 
 void serve_resource(struct client_info *client, const char *path) {
-
+#define BSIZE 1024
+    char buffer[BSIZE];
     printf("serve_resource %s %s\n", get_client_address(client), path);
 
     if (strcmp(path, "/") == 0)
         path = "/index.html";
 
     if (strncmp(path, "/led_on", 7) == 0)
-        path = "/index.html";
+    {
+        sprintf(buffer, "HTTP/1.1 200 OK\r\n");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "Connection: close\r\n");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "Content-Length: %u\r\n", 1);
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "Content-Type: %s\r\n", "text/plain");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "\r\n");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "%d", 1);
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        drop_client(client);
+        return;
+    }
+        
 
     if (strncmp(path, "/led_off", 8) == 0)
-        path = "/index.html";
+    {
+        sprintf(buffer, "HTTP/1.1 200 OK\r\n");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "Connection: close\r\n");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "Content-Length: %u\r\n", 1);
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "Content-Type: %s\r\n", "text/plain");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "\r\n");
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        sprintf(buffer, "%d", 0);
+        send(client->socket, buffer, strlen(buffer), 0);
+
+        drop_client(client);
+        return;
+    }
 
     if (strlen(path) > 100) {
         send_400(client);
@@ -266,8 +310,7 @@ void serve_resource(struct client_info *client, const char *path) {
 
     const char *ct = get_content_type(full_path);
 
-#define BSIZE 1024
-    char buffer[BSIZE];
+
 
     sprintf(buffer, "HTTP/1.1 200 OK\r\n");
     send(client->socket, buffer, strlen(buffer), 0);
