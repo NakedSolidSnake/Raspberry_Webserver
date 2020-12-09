@@ -15,6 +15,8 @@ target_link_libraries(webserver PUBLIC hardware pthread)
 
 target_sources(webserver
   PUBLIC 
+  ${CMAKE_CURRENT_LIST_DIR}/src/http.c  
+  ${CMAKE_CURRENT_LIST_DIR}/src/server.c
   ${CMAKE_CURRENT_LIST_DIR}/src/webserver.c
   )
 
