@@ -8,11 +8,10 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_BUILD_TYPE Debug)
 
 
-#build thread
+#build webserver
 add_executable(webserver "")
 
-# target_link_libraries(webserver PUBLIC hardware pthread)
-target_link_libraries(webserver PUBLIC pthread)
+target_link_libraries(webserver PUBLIC hardware pthread)
 
 target_sources(webserver
   PUBLIC 

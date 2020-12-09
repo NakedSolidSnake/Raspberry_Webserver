@@ -23,6 +23,14 @@
  */
 
 #include "chap07.h"
+#include <led.h>
+
+static eState_t eState = eStateLow;
+
+static LED_t led = {
+        .gpio.pin = 0,
+        .gpio.eMode = eModeOutput
+    };
 
 const char *get_directory(const char *path)
 {
@@ -228,6 +236,9 @@ void serve_resource(struct client_info *client, const char *path) {
 
     if (strncmp(path, "/led_on", 7) == 0)
     {
+        eState = eStateHigh;
+        LED_set(&led, eState);
+
         sprintf(buffer, "HTTP/1.1 200 OK\r\n");
         send(client->socket, buffer, strlen(buffer), 0);
 
@@ -243,7 +254,7 @@ void serve_resource(struct client_info *client, const char *path) {
         sprintf(buffer, "\r\n");
         send(client->socket, buffer, strlen(buffer), 0);
 
-        sprintf(buffer, "%d", 1);
+        sprintf(buffer, "%d", eState);
         send(client->socket, buffer, strlen(buffer), 0);
 
         drop_client(client);
@@ -253,6 +264,9 @@ void serve_resource(struct client_info *client, const char *path) {
 
     if (strncmp(path, "/led_off", 8) == 0)
     {
+        eState = eStateLow;
+        LED_set(&led, eState);
+
         sprintf(buffer, "HTTP/1.1 200 OK\r\n");
         send(client->socket, buffer, strlen(buffer), 0);
 
@@ -268,7 +282,7 @@ void serve_resource(struct client_info *client, const char *path) {
         sprintf(buffer, "\r\n");
         send(client->socket, buffer, strlen(buffer), 0);
 
-        sprintf(buffer, "%d", 0);
+        sprintf(buffer, "%d", eState);
         send(client->socket, buffer, strlen(buffer), 0);
 
         drop_client(client);
@@ -347,6 +361,9 @@ int main() {
         return 1;
     }
 #endif
+
+    if(LED_init(&led))
+        return EXIT_FAILURE;
 
     SOCKET server = create_socket(0, "8989");
 
