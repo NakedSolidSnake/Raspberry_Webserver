@@ -24,15 +24,9 @@
 
 #include "http.h"
 #include "client_info.h"
-#include <led.h>
 #include "server.h"
-
-static eState_t eState = eStateLow;
-
-static LED_t led = {
-        .gpio.pin = 0,
-        .gpio.eMode = eModeOutput
-    };
+#include "routes.h"
+#include "endpoints.h"
 
 const char *get_directory(const char *path)
 {
@@ -50,67 +44,10 @@ const char *get_directory(const char *path)
 }
 
 void serve_resource(struct client_info *client, const char *path) {
-#define BSIZE 1024
+#define BSIZE ( 1024 * 8 )
     char buffer[BSIZE];
+    int resul;
     printf("serve_resource %s %s\n", get_client_address(client), path);
-
-    if (strcmp(path, "/") == 0)
-        path = "/index.html";
-
-    if (strncmp(path, "/led_on", 7) == 0)
-    {
-        eState = eStateHigh;
-        LED_set(&led, eState);
-
-        sprintf(buffer, "HTTP/1.1 200 OK\r\n");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "Connection: close\r\n");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "Content-Length: %u\r\n", 1);
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "Content-Type: %s\r\n", "text/plain");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "\r\n");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "%d", eState);
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        drop_client(client);
-        return;
-    }
-        
-
-    if (strncmp(path, "/led_off", 8) == 0)
-    {
-        eState = eStateLow;
-        LED_set(&led, eState);
-
-        sprintf(buffer, "HTTP/1.1 200 OK\r\n");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "Connection: close\r\n");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "Content-Length: %u\r\n", 1);
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "Content-Type: %s\r\n", "text/plain");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "\r\n");
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        sprintf(buffer, "%d", eState);
-        send(client->socket, buffer, strlen(buffer), 0);
-
-        drop_client(client);
-        return;
-    }
 
     if (strlen(path) > 100) {
         HTTP_send_400(client);
@@ -122,53 +59,26 @@ void serve_resource(struct client_info *client, const char *path) {
         return;
     }
 
-    char full_path[128];
-    sprintf(full_path, "%s%s", get_directory(path), path);
-
-    printf("full_path = %s.\n", full_path);
-    FILE *fp = fopen(full_path, "rb");
-
-    if (!fp) {
+    resul = Routes_Exec(path, buffer);
+    if(!resul)
+    {
+        send(client->socket, buffer, strlen(buffer), 0);
+    }else{
         HTTP_send_404(client);
-        return;
     }
-
-    fseek(fp, 0L, SEEK_END);
-    size_t cl = ftell(fp);
-    rewind(fp);
-
-    const char *ct = HTTP_get_content_type(full_path);
-
-    sprintf(buffer, "HTTP/1.1 200 OK\r\n");
-    send(client->socket, buffer, strlen(buffer), 0);
-
-    sprintf(buffer, "Connection: close\r\n");
-    send(client->socket, buffer, strlen(buffer), 0);
-
-    sprintf(buffer, "Content-Length: %u\r\n", cl);
-    send(client->socket, buffer, strlen(buffer), 0);
-
-    sprintf(buffer, "Content-Type: %s\r\n", ct);
-    send(client->socket, buffer, strlen(buffer), 0);
-
-    sprintf(buffer, "\r\n");
-    send(client->socket, buffer, strlen(buffer), 0);
-
-    int r = fread(buffer, 1, BSIZE, fp);
-    while (r) {
-        send(client->socket, buffer, r, 0);
-        r = fread(buffer, 1, BSIZE, fp);
-    }    
-
-    fclose(fp);
+    memset(buffer, 0, sizeof buffer);
+    
     drop_client(client);
 }
 
 
 int main() {
 
-    if(LED_init(&led))
-        return EXIT_FAILURE;
+    Routes_Add("/", Endpoint_Index);
+    Routes_Add("/style.css", Endpoint_Index);
+    Routes_Add("/script.js", Endpoint_Index);
+    Routes_Add("/led_on", Endpoint_LEDOn);
+    Routes_Add("/led_off", Endpoint_LEDOff);
 
     SOCKET server = create_socket(0, "8989");
     server_execute(server);

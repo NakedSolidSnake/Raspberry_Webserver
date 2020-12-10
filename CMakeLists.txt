@@ -17,6 +17,9 @@ target_sources(webserver
   PUBLIC 
   ${CMAKE_CURRENT_LIST_DIR}/src/http.c  
   ${CMAKE_CURRENT_LIST_DIR}/src/server.c
+  ${CMAKE_CURRENT_LIST_DIR}/src/routes.c
+  ${CMAKE_CURRENT_LIST_DIR}/src/file.c
+  ${CMAKE_CURRENT_LIST_DIR}/src/endpoints.c
   ${CMAKE_CURRENT_LIST_DIR}/src/webserver.c
   )
 
